@@ -389,7 +389,7 @@ class Game:
         self.raw_clue_text = doc.getPageText(1)
         doc.close()
 
-        self.__process_clue_locations(self.raw_clue_locations)
+        self.__process_clue_locations()
         self.__process_clue_text()
 
     def __get_raw_clue_locations(self, doc):
