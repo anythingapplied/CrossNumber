@@ -167,7 +167,7 @@ class Cell:
             self.iserror = True
 
     def on_click(self, event=None):
-        self.game.select(self.x, self.y)
+        self.game.select(self)
 
     def on_enter(self, event=None):
         self.mouseover = True
@@ -198,7 +198,8 @@ class Clue:
 
         matchtext = '[0-9]+[AD]|[0-9,]+'
         self.cluestyle = tuple(re.split(matchtext, cluetext))
-        self.refrences = re.findall(matchtext, cluetext)
+        self.refrences = tuple(re.findall(matchtext, cluetext))
+        self.refrenceclues = tuple(ref for ref in self.refrences if ref[-1] in 'AD')
         self.game.cluetypes[self.cluestyle].append(cluetext)
 
         if self.clueref[1] == 'A':
@@ -206,6 +207,10 @@ class Clue:
         else:
             frame = self.game.down
         self.rowframes = frame.addclue(self.clueref[0], self.cluetext, self.length)
+        self.updatecolor()
+
+        for item in self.rowframes:
+            item.bind('<Button-1>', self.on_click)
 
     def __str__(self):
         return f'{self.getname(self.clueref)}: {self.cluetext}'
@@ -241,7 +246,7 @@ class Clue:
         if self.isselected:
             color = Colors.selected
             self.game.selectionColoredClues.append(self)
-        if self.ispassiveselected:
+        elif self.ispassiveselected:
             color = Colors.mouseover
             self.game.selectionColoredClues.append(self)
         elif self.mouseover:
@@ -274,6 +279,9 @@ class Clue:
     def min(self):
         return int(''.join(str(min(cell.values)) for cell in self.cells))
 
+    def on_click(self, event=None):
+        self.game.selectclue(self)
+
     @staticmethod
     def getref(cluename):
         return (int(cluename[:-1]), cluename[-1])
@@ -292,7 +300,9 @@ class Clue:
             print("Error: Direction not found")
 
 class Game:
-    def __init__(self, number=None):
+    def __init__(self, root, number=None):
+        self.root = root
+
         self.cell_by_xy = {}
         self.xy_by_cluenum = {}
         self.cluenum_by_xy = {}
@@ -314,15 +324,14 @@ class Game:
         self.clues_by_clueref = {}
         self.cluetypes = collections.defaultdict(list)
 
-        self.window = tk.Tk()
         self.number = number
-        self.window.title('Crossnumber')
-        self.window.iconbitmap('noun_crossword puzzle_2699735.ico')
+        self.root.title('Crossnumber')
+        self.root.iconbitmap('noun_crossword puzzle_2699735.ico')
 
         def dummy():
             pass
 
-        menubar = tk.Menu(self.window)
+        menubar = tk.Menu(self.root)
 
         filemenu = tk.Menu(menubar, tearoff=0)
         filemenu.add_command(label='Open', command=dummy)
@@ -330,7 +339,7 @@ class Game:
         filemenu.add_command(label='Save', command=self.save)
         filemenu.add_command(label='Restart', command=self.restart)
         filemenu.add_separator()
-        filemenu.add_command(label='Exit', command=self.window.quit)
+        filemenu.add_command(label='Exit', command=self.root.quit)
         menubar.add_cascade(label='File', menu=filemenu)
 
         editmenu = tk.Menu(menubar, tearoff=0)
@@ -346,21 +355,21 @@ class Game:
         helpmenu.add_command(label="About", command=dummy)
         menubar.add_cascade(label="Help", menu=dummy)
 
-        self.window.config(menu=menubar)
+        self.root.config(menu=menubar)
 
-        self.board = tk.Canvas(self.window, width=600, height=600)
+        self.board = tk.Canvas(self.root, width=600, height=600)
         self.board.grid(row=0, column=0, sticky=tk.NSEW)
-        self.across = clueframe.ClueFrame(self.window, 'Across', width=300)
+        self.across = clueframe.ClueFrame(self.root, 'Across', width=300)
         self.across.grid(row=0, column=1, sticky=tk.NSEW)
-        self.down = clueframe.ClueFrame(self.window, 'Down', width=300)
+        self.down = clueframe.ClueFrame(self.root, 'Down', width=300)
         self.down.grid(row=0, column=2, sticky=tk.NSEW)
 
-        self.window.grid_columnconfigure(0, weight=1)
-        #self.window.grid_columnconfigure(1, weight=1)
-        #self.window.grid_columnconfigure(2, weight=1)
-        #self.window.grid_rowconfigure(0, weight=1)
+        self.root.grid_columnconfigure(0, weight=1)
+        #self.root.grid_columnconfigure(1, weight=1)
+        #self.root.grid_columnconfigure(2, weight=1)
+        #self.root.grid_rowconfigure(0, weight=1)
 
-        self.window.bind('<KeyPress>', self.on_keydown)
+        self.root.bind('<KeyPress>', self.on_keydown)
 
         if number:
             self.open(number)
@@ -373,8 +382,6 @@ class Game:
             fill=Colors.blanks)
         self.board.tag_lower(rect)
 
-        self.window.mainloop()
-
     def open(self, number):
         filename = f'crossnumber{number}.pdf'
         doc = fitz.open(filename)
@@ -383,7 +390,7 @@ class Game:
         doc.close()
 
         self.__process_clue_locations(self.raw_clue_locations)
-        self.__process_clue_text(self.raw_clue_text)
+        self.__process_clue_text()
 
     def __get_raw_clue_locations(self, doc):
         raw_clue_locations = []
@@ -413,21 +420,21 @@ class Game:
         print('No {label} offset found')
         raise SyntaxError
 
-    def __process_clue_locations(self, raw_clue_locations):
-        width = sorted(x[1] for x in raw_clue_locations)
+    def __process_clue_locations(self):
+        width = sorted(x[1] for x in self.raw_clue_locations)
         width_increment = self.__get_increment_factor(width, 'width')
-        height = sorted(x[2] for x in raw_clue_locations)
+        height = sorted(x[2] for x in self.raw_clue_locations)
         height_increment = self.__get_increment_factor(height, 'height')
 
         clue_locations = []
-        for clue, w, h in raw_clue_locations:
+        for clue, w, h in self.raw_clue_locations:
             new_width = round(width_increment * (w - width[0]) / (width[-1] - width[0]))
             new_height = round(height_increment * (h - height[0]) / (height[-1] - height[0]))
             clue_locations.append((clue, new_width, new_height))
             self.start_clue_anchor(clue, new_width, new_height)
         return clue_locations
 
-    def __process_clue_text(self, raw_clue_text):
+    def __process_clue_text(self):
         across_start = self.raw_clue_text.find('\nAcross\n')+1
         down_start = self.raw_clue_text.find('\nDown\n')+1
 
@@ -491,15 +498,13 @@ class Game:
         if event.keysym in ('Up', 'Down', 'Left', 'Right'):
             self.moveselected(event.keysym, event.state)
 
-    def select(self, x, y):
-        """Select the cell at x,y for current input.
+    def select(self, cellselection, toggle=True):
+        """Select cell for current input.
         Color selected and related cells"""
-        self.clearselectedcells()
-        self.clearselectedclues()
-        cellselection = self.cell_by_xy[(x,y)]
+        self.clearselections()
         clues = cellselection.clues
         if len(clues) == 2:
-            if cellselection is self.selectedCell:
+            if toggle and cellselection is self.selectedCell:
                 self.directionbias = Clue.dirswitch(self.directionbias)
             if self.directionbias == 'A':
                 clueselection = clues[0]
@@ -517,18 +522,24 @@ class Game:
         cellselection.isselected = True
         self.selectedCell = cellselection
 
-    def clearselectedcells(self):
-        """Clears cell colors because of current selections"""
+    def selectclue(self, clue):
+        """Select cell based on clue click"""
+        self.directionbias = clue.clueref[1]
+        if self.selectedCell in clue.cells:
+            self.select(self.selectedCell, toggle=False)
+        else:
+            self.select(clue.cells[0], toggle=False)
+
+    def clearselections(self):
+        """Clears cell/clue colors caused bycurrent selections"""
         while self.selectionColoredCells:
             cell = self.selectionColoredCells.pop()
             cell.isselected = False
             cell.isrowselected = False
-
-    def clearselectedclues(self):
-        """Clears clue colors because of current selections"""
         while self.selectionColoredClues:
             clue = self.selectionColoredClues.pop()
             clue.isselected = False
+            clue.ispassiveselected = False
 
     def start_clue_anchor(self, cluenum, x, y):
         self.cell_by_xy[(x, y)] = Cell(self, True, x, y, text=cluenum)
@@ -569,7 +580,10 @@ class Game:
                 self.cell_by_xy[(x + xshift, y + yshift)].on_click()
 
 if __name__ == '__main__':
-    cross = Game(10)
+    root = tk.Tk()
+    cross = Game(root, 10)
+    root.mainloop()
+
 
 # print(cross.display_basic())
 
