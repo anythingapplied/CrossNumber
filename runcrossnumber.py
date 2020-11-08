@@ -8,6 +8,7 @@ import ctypes
 import fitz
 
 import clueframe
+import movequeue
 
 #Todo:
 # Striping clues (white/gray/white/etc)
@@ -29,13 +30,13 @@ class Colors:
     mouseover = 'LightGray'
     rowselected = '#CCE6F3'
     hints = '#191A17'
-    error = 'red'
+    error = 'Red'
 
 class Cell:
     def __init__(self, game, ishead, x, y, text=None):
         self.game = game
 
-        self._ishead = ishead
+        self.ishead = ishead
 
         self._iserror = False
         self._isselected = False
@@ -81,7 +82,7 @@ class Cell:
                     font=helv2, state=tk.DISABLED, disabledfill=Colors.hints)
             self.digitlist.append(digitid)
             self.availablehints.add(digit)
-        if self._ishead:
+        if self.ishead:
             self.togglehint((0,))
 
         self.bigone = self.game.board.create_text(
@@ -155,7 +156,7 @@ class Cell:
             if num in self.availablehints:
                 self.game.board.itemconfigure(self.digitlist[num], state=tk.HIDDEN)
                 self.availablehints.remove(num)
-            elif not (num == 0 and self._ishead):
+            elif not (num == 0 and self.ishead):
                 self.game.board.itemconfigure(self.digitlist[num], state=tk.DISABLED)
                 self.availablehints.add(num)
 
@@ -297,7 +298,7 @@ class Clue:
         elif direction == 'D':
             return 'A'
         else:
-            print("Error: Direction not found")
+            print('Error: Direction not found')
 
 class Game:
     def __init__(self, root, number=None):
@@ -343,17 +344,17 @@ class Game:
         menubar.add_cascade(label='File', menu=filemenu)
 
         editmenu = tk.Menu(menubar, tearoff=0)
-        editmenu.add_command(label="Undo", command=dummy)
-        editmenu.add_command(label="Redo", command=dummy)
+        editmenu.add_command(label='Undo', command=dummy)
+        editmenu.add_command(label='Redo', command=dummy)
         editmenu.add_separator()
-        editmenu.add_command(label="Start Fork", command=dummy)
-        editmenu.add_command(label="Fail Fork", command=dummy)
-        editmenu.add_command(label="Switch Fork", command=dummy)
-        menubar.add_cascade(label="Edit", menu=editmenu)
+        editmenu.add_command(label='Start Fork', command=dummy)
+        editmenu.add_command(label='Fail Fork', command=dummy)
+        editmenu.add_command(label='Switch Fork', command=dummy)
+        menubar.add_cascade(label='Edit', menu=editmenu)
 
         helpmenu = tk.Menu(menubar, tearoff=0)
-        helpmenu.add_command(label="About", command=dummy)
-        menubar.add_cascade(label="Help", menu=dummy)
+        helpmenu.add_command(label='About', command=dummy)
+        menubar.add_cascade(label='Help', menu=dummy)
 
         self.root.config(menu=menubar)
 
@@ -499,8 +500,8 @@ class Game:
             self.moveselected(event.keysym, event.state)
 
     def select(self, cellselection, toggle=True):
-        """Select cell for current input.
-        Color selected and related cells"""
+        '''Select cell for current input.
+        Color selected and related cells'''
         self.clearselections()
         clues = cellselection.clues
         if len(clues) == 2:
@@ -523,7 +524,7 @@ class Game:
         self.selectedCell = cellselection
 
     def selectclue(self, clue):
-        """Select cell based on clue click"""
+        '''Select cell based on clue click'''
         self.directionbias = clue.clueref[1]
         if self.selectedCell in clue.cells:
             self.select(self.selectedCell, toggle=False)
@@ -531,7 +532,7 @@ class Game:
             self.select(clue.cells[0], toggle=False)
 
     def clearselections(self):
-        """Clears cell/clue colors caused bycurrent selections"""
+        '''Clears cell/clue colors caused bycurrent selections'''
         while self.selectionColoredCells:
             cell = self.selectionColoredCells.pop()
             cell.isselected = False
